@@ -1,0 +1,360 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "DarkCode Hub",
+    LoadingTitle = "Loading...",
+    LoadingSubtitle = "by DarkCode",
+    ConfigurationSaving = {
+        Enabled = false
+    }
+})
+
+local MainTab = Window:CreateTab("Main")
+local ESPTab = Window:CreateTab("ESP")
+local SettingsTab = Window:CreateTab("Settings")
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- Variables
+local AimCharEnabled = false
+local AimCamEnabled = false
+local GuiVisible = true
+
+local ESPPlayerEnabled = false
+local ESPHighlightEnabled = false
+local ESPHumanEnabled = false
+local ESPAnomalyEnabled = false
+
+local SpeedEnabled = false
+local InfJumpEnabled = false
+local FlyEnabled = false
+local NoclipEnabled = false
+
+local WalkSpeedValue = 16
+local JumpPowerValue = 50
+local FlySpeedValue = 50
+
+-- Main Tab
+MainTab:CreateToggle({
+    Name = "Aim Char",
+    CurrentValue = false,
+    Callback = function(Value)
+        AimCharEnabled = Value
+    end
+})
+
+MainTab:CreateToggle({
+    Name = "Aim Cam",
+    CurrentValue = false,
+    Callback = function(Value)
+        AimCamEnabled = Value
+    end
+})
+
+MainTab:CreateToggle({
+    Name = "Rayfield On/Off",
+    CurrentValue = true,
+    Callback = function(Value)
+        GuiVisible = Value
+        if GuiVisible then
+            Rayfield:LoadConfiguration()
+        else
+            Rayfield:Destroy()
+        end
+    end
+})
+
+-- ESP Tab
+ESPTab:CreateToggle({
+    Name = "ESP Player",
+    CurrentValue = false,
+    Callback = function(Value)
+        ESPPlayerEnabled = Value
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "ESP Highlight",
+    CurrentValue = false,
+    Callback = function(Value)
+        ESPHighlightEnabled = Value
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "ESP Human",
+    CurrentValue = false,
+    Callback = function(Value)
+        ESPHumanEnabled = Value
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "ESP Anomaly",
+    CurrentValue = false,
+    Callback = function(Value)
+        ESPAnomalyEnabled = Value
+    end
+})
+
+-- Settings Tab
+SettingsTab:CreateToggle({
+    Name = "Speed Hack",
+    CurrentValue = false,
+    Callback = function(Value)
+        SpeedEnabled = Value
+    end
+})
+
+SettingsTab:CreateSlider({
+    Name = "Walk Speed",
+    Range = {16, 200},
+    Increment = 1,
+    Suffix = "Speed",
+    CurrentValue = 16,
+    Callback = function(Value)
+        WalkSpeedValue = Value
+    end
+})
+
+SettingsTab:CreateSlider({
+    Name = "Jump Power",
+    Range = {50, 200},
+    Increment = 1,
+    Suffix = "Power",
+    CurrentValue = 50,
+    Callback = function(Value)
+        JumpPowerValue = Value
+    end
+})
+
+SettingsTab:CreateToggle({
+    Name = "Infinite Jump",
+    CurrentValue = false,
+    Callback = function(Value)
+        InfJumpEnabled = Value
+    end
+})
+
+SettingsTab:CreateToggle({
+    Name = "Fly",
+    CurrentValue = false,
+    Callback = function(Value)
+        FlyEnabled = Value
+    end
+})
+
+SettingsTab:CreateSlider({
+    Name = "Fly Speed",
+    Range = {10, 200},
+    Increment = 5,
+    Suffix = "Speed",
+    CurrentValue = 50,
+    Callback = function(Value)
+        FlySpeedValue = Value
+    end
+})
+
+SettingsTab:CreateToggle({
+    Name = "Noclip",
+    CurrentValue = false,
+    Callback = function(Value)
+        NoclipEnabled = Value
+    end
+})
+
+-- ESP Stuff
+local ESPBoxes = {}
+local ESPHighlights = {}
+
+local function CreateBox()
+    local box = Drawing.new("Square")
+    box.Thickness = 2
+    box.Filled = false
+    box.Transparency = 1
+    box.Visible = false
+    return box
+end
+
+local function AddHighlight(char, color)
+    if char:FindFirstChild("ESPHighlight") then
+        char.ESPHighlight:Destroy()
+    end
+    local hl = Instance.new("Highlight")
+    hl.Name = "ESPHighlight"
+    hl.FillColor = color
+    hl.OutlineColor = color
+    hl.FillTransparency = 0.4
+    hl.OutlineTransparency = 0
+    hl.Parent = char
+    ESPHighlights[char] = hl
+end
+
+local function GetNearestPlayer()
+    local Character = LocalPlayer.Character
+    if not Character or not Character:FindFirstChild("HumanoidRootPart") then return nil end
+    
+    local MyRoot = Character.HumanoidRootPart
+    local Nearest = nil
+    local Closest = 50
+    
+    for _, plr in Players:GetPlayers() do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local dist = (MyRoot.Position - plr.Character.HumanoidRootPart.Position).Magnitude
+            if dist < Closest then
+                Closest = dist
+                Nearest = plr.Character
+            end
+        end
+    end
+    return Nearest
+end
+
+-- Infinite Jump
+UserInputService.JumpRequest:Connect(function()
+    if InfJumpEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+        LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+-- Fly variables
+local FlyBodyVelocity = nil
+local FlyConnection = nil
+
+local function UpdateFly()
+    local Character = LocalPlayer.Character
+    if not Character or not Character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local HRP = Character.HumanoidRootPart
+    
+    if FlyEnabled then
+        if not FlyBodyVelocity then
+            FlyBodyVelocity = Instance.new("BodyVelocity")
+            FlyBodyVelocity.MaxForce = Vector3.new(400000, 400000, 400000)
+            FlyBodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            FlyBodyVelocity.Parent = HRP
+        end
+        
+        if not FlyConnection then
+            FlyConnection = RunService.RenderStepped:Connect(function()
+                if not FlyEnabled then return end
+                local moveDirection = Vector3.new(0, 0, 0)
+                local camLook = Camera.CFrame.LookVector
+                
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDirection = moveDirection + camLook end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDirection = moveDirection - camLook end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDirection = moveDirection - camLook:Cross(Vector3.new(0,1,0)) end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDirection = moveDirection + camLook:Cross(Vector3.new(0,1,0)) end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDirection = moveDirection + Vector3.new(0, 1, 0) end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveDirection = moveDirection - Vector3.new(0, 1, 0) end
+                
+                if moveDirection.Magnitude > 0 then
+                    moveDirection = moveDirection.Unit
+                end
+                
+                FlyBodyVelocity.Velocity = moveDirection * FlySpeedValue
+            end)
+        end
+    else
+        if FlyBodyVelocity then
+            FlyBodyVelocity:Destroy()
+            FlyBodyVelocity = nil
+        end
+        if FlyConnection then
+            FlyConnection:Disconnect()
+            FlyConnection = nil
+        end
+    end
+end
+
+-- Noclip
+local NoclipConnection = nil
+
+local function UpdateNoclip()
+    if NoclipEnabled then
+        if not NoclipConnection then
+            NoclipConnection = RunService.Stepped:Connect(function()
+                if LocalPlayer.Character then
+                    for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.CanCollide = false
+                        end
+                    end
+                end
+            end)
+        end
+    else
+        if NoclipConnection then
+            NoclipConnection:Disconnect()
+            NoclipConnection = nil
+        end
+    end
+end
+
+-- Main loop
+RunService.RenderStepped:Connect(function()
+    local Character = LocalPlayer.Character
+    if not Character then return end
+    
+    local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+    if Humanoid then
+        if SpeedEnabled then
+            Humanoid.WalkSpeed = WalkSpeedValue
+        else
+            Humanoid.WalkSpeed = 16
+        end
+        
+        Humanoid.JumpPower = JumpPowerValue
+    end
+    
+    local Nearest = GetNearestPlayer()
+    
+    -- Aim Char
+    if AimCharEnabled and Character:FindFirstChild("HumanoidRootPart") and Nearest and Nearest:FindFirstChild("HumanoidRootPart") then
+        local MyRoot = Character.HumanoidRootPart
+        local TargetPos = Vector3.new(Nearest.HumanoidRootPart.Position.X, MyRoot.Position.Y, Nearest.HumanoidRootPart.Position.Z)
+        MyRoot.CFrame = CFrame.lookAt(MyRoot.Position, TargetPos)
+    end
+    
+    -- Aim Cam
+    if AimCamEnabled and Nearest and Nearest:FindFirstChild("HumanoidRootPart") and Character:FindFirstChild("HumanoidRootPart") then
+        local MyRoot = Character.HumanoidRootPart
+        local TargetRoot = Nearest.HumanoidRootPart
+        local Direction = (TargetRoot.Position - MyRoot.Position).Unit
+        local Distance = (TargetRoot.Position - MyRoot.Position).Magnitude
+        local DesiredCamPos = MyRoot.Position - Direction * (Distance * 0.3 + 10) + Vector3.new(0, 5, 0)
+        local LookAtPos = TargetRoot.Position + Vector3.new(0, 2, 0)
+        Camera.CFrame = CFrame.lookAt(DesiredCamPos, LookAtPos)
+    end
+    
+    -- ESP Highlight for players
+    if ESPHighlightEnabled then
+        for _, plr in Players:GetPlayers() do
+            if plr ~= LocalPlayer and plr.Character then
+                AddHighlight(plr.Character, Color3.fromRGB(255, 0, 0))
+            end
+        end
+    else
+        for _, hl in pairs(ESPHighlights) do
+            if hl and hl.Parent then
+                hl:Destroy()
+            end
+        end
+        ESPHighlights = {}
+    end
+    
+    UpdateFly()
+    UpdateNoclip()
+end)
+
+-- Handle character respawn
+LocalPlayer.CharacterAdded:Connect(function()
+    UpdateFly()
+    UpdateNoclip()
+end)
